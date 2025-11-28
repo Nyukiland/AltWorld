@@ -219,3 +219,158 @@ struct CurlNoise
 		return C * Strength;
 	}
 };
+
+struct Kernel
+{
+	static float3x3 Identity() 
+	{ 
+		return float3x3(
+			0,0,0,
+			0,1,0,
+			0,0,0); 
+	}
+
+	static float3x3 Edge0() 
+	{ 
+		return float3x3(
+			1,0,-1,
+			0,0,0,
+			-1,0,1);
+	}
+
+	static float3x3 Edge1() 
+	{ 
+		return float3x3(
+			0,1,0,
+			1,-4,1,
+			0,1,0); 	
+	}
+
+	static float3x3 Edge2() 
+	{ 
+		return float3x3(
+			-1,-1,-1,
+			-1, 8,-1,
+			-1,-1,-1); 
+	}
+
+	static float3x3 Sharpen() 
+	{ 
+		return float3x3(
+			0,-1,0,
+			-1,5,-1,
+			0,-1,0); 
+	}
+
+	static float3x3 BoxBlur() 
+	{ 
+		return float3x3(
+			1,1,1,
+			1,1,1,
+			1,1,1) * 0.1111; 
+	}
+
+	static float3x3 GaussianBlur() 
+	{ 
+		return float3x3(
+			1,2,1,
+			2,4,2,
+			1,2,1) * 0.0625; 
+	}
+
+	static float3x3 Emboss() 
+	{ 
+		return float3x3(
+			-2,-1,0,
+			-1, 1,1,
+		 	0, 1,2); 
+	}
+
+	static float2 KernelOffset(int Index, float2 TexelSize)
+	{
+		const float2 Offsets[9] =
+		{
+			float2(-1,-1), float2(0,-1), float2(1,-1),
+			float2(-1, 0), float2(0, 0), float2(1, 0),
+			float2(-1, 1), float2(0, 1), float2(1, 1)
+		};
+
+		return Offsets[Index] * TexelSize;
+	}
+
+	static void Region3x3(Texture2D Tex, float2 UV, float2 TexelSize,
+		out float3x3 R, out float3x3 G, out float3x3 B)
+	{
+		float3 Values[9];
+
+		for (int I = 0; I < 9; I++)
+		{
+			float3 C = Tex.SampleLevel(TexSampler, UV + KernelOffset(I, TexelSize), 0).rgb;
+			Values[I] = C;
+		}
+
+		R = float3x3(
+			Values[0].r, Values[1].r, Values[2].r,
+			Values[3].r, Values[4].r, Values[5].r,
+			Values[6].r, Values[7].r, Values[8].r);
+
+		G = float3x3(
+			Values[0].g, Values[1].g, Values[2].g,
+			Values[3].g, Values[4].g, Values[5].g,
+			Values[6].g, Values[7].g, Values[8].g);
+
+		B = float3x3(
+			Values[0].b, Values[1].b, Values[2].b,
+			Values[3].b, Values[4].b, Values[5].b,
+			Values[6].b, Values[7].b, Values[8].b);
+	}
+
+	static float3 Convolution(float3x3 Matrix, Texture2D Tex, float2 UV, float2 Resolution)
+	{
+		float2 TexelSize = 1.0 / Resolution;
+
+		float3x3 R, G, B;
+		Region3x3(Tex, UV, TexelSize, R, G, B);
+
+		float3 OutCol = 0;
+
+		for (int Y = 0; Y < 3; Y++)
+		{
+			for (int X = 0; X < 3; X++)
+			{
+				OutCol.r += R[Y][X] * Matrix[Y][X];
+				OutCol.g += G[Y][X] * Matrix[Y][X];
+				OutCol.b += B[Y][X] * Matrix[Y][X];
+			}
+		}
+
+		return OutCol;
+	}
+};
+
+struct Mandelbrot
+{
+	static float2 SquareImaginary(float2 number)
+	{
+		return float2(
+			pow(number.x,2)-pow(number.y,2),
+			2*number.x*number.y
+		);
+	}
+	
+	static float3 MandelbrotFunc(float2 UV, float Initial, float Step)
+	{
+		float2 u = Initial;
+		float2 c = UV;
+
+		int i = 0;
+		for (i = 0; i < 100; i++)
+		{
+			u = SquareImaginary(u) + c;
+			if (length(u) > 2) break;
+		}
+
+		float brightness = 1 - float(i)/Step;
+		return i == 100 ? float3(0,0,0) : float3(brightness, brightness,brightness);
+	}
+};
